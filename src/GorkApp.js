@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, Link } from 'react-router-dom';
 import { PieChart as RechartsPieChart, Cell, ResponsiveContainer, Pie } from 'recharts';
 import { 
@@ -13,7 +13,11 @@ import {
   Home, 
   BarChart3, 
   Plus, 
-  CreditCard 
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Receipt,
+  Bell
 } from 'lucide-react';
 
 // Bottom Navigation Component
@@ -454,7 +458,7 @@ const CategoryVisualization = ({ transactions, budgetData }) => {
 };
 
 // Budget and Goals Component
-const BudgetGoals = ({ budgetData, setBudgetData }) => {
+const BudgetGoals = ({ budgetData, setBudgetData, savingsGoals, addSavingsGoal, updateSavingsGoal, deleteSavingsGoal }) => {
   const navigate = useNavigate();
   const [budget, setBudget] = useState({
     type: 'monthly',
@@ -536,128 +540,211 @@ const BudgetGoals = ({ budgetData, setBudgetData }) => {
 };
 
 // Dashboard Component
-const Dashboard = ({ accounts, budgetData, transactions }) => {
+const Dashboard = ({ transactions, budgetData, cards, notifications, savingsGoals, settings, profile, payBill }) => {
+  const navigate = useNavigate();
+  const billsRef = useRef(null);
+
+  // 3.2 Derived values
+  const totalBalanceRaw = cards.reduce((sum, c) => sum + c.balance, 0);
+  const totalBalance = totalBalanceRaw.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const defaultCard = cards.find(c => c.isDefault) || cards[0];
+  const unreadCount = notifications.filter(n => !n.read).length;
+  const spendingPercent = Math.min((budgetData.totalSpent / budgetData.monthlyBudget) * 100, 100);
+  const spendingBarColor = spendingPercent < 70 ? 'bg-green-500' : (spendingPercent < 90 ? 'bg-amber-500' : 'bg-red-500');
+  const recentTransactions = [...transactions].reverse().slice(0, 5);
+  const currencySymbols = { GHS: 'GH₵', USD: '$', EUR: '€', GBP: '£' };
+  const currencySymbol = currencySymbols[settings.currency] || 'GH₵';
+
   return (
-    <div className="max-w-md mx-auto bg-white min-h-screen">
-      <div className="min-h-screen bg-gray-100">
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4">
-          <div className="flex justify-between items-center mb-4">
-            <Link to="/auth">
-              <ArrowLeft className="w-6 h-6" />
-            </Link>
-            <h1 className="text-xl font-bold">Dashboard</h1>
-            <Link to="/settings">
-              <SettingsIcon className="w-6 h-6" />
-            </Link>
+    <div className="max-w-md mx-auto bg-white min-h-screen pb-24">
+      <div className="p-4">
+        {/* 3.3 Header Row */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Good morning, {profile.name || 'User'}</h1>
+            <p className="text-gray-500 text-sm">Here's your overview</p>
           </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <p className="text-sm opacity-90 mb-1">Current Balance</p>
-              <p className="text-2xl font-bold">₵{accounts.current}</p>
-            </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <p className="text-sm opacity-90 mb-1">Projected Balance</p>
-              <p className="text-2xl font-bold">₵{accounts.projected}</p>
-            </div>
-          </div>
+          <button 
+            onClick={() => navigate('/notifications')}
+            className="relative p-2 bg-gray-100 rounded-full"
+          >
+            <Bell className="w-6 h-6 text-gray-600" />
+            {unreadCount > 0 && (
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white translate-x-1/4 -translate-y-1/4">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        <div className="p-4 bg-white m-4 mt-[-8px] rounded-lg shadow mb-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
+        {/* 3.4 Balance Card */}
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg mb-6">
+          <p className="text-sm opacity-90 mb-1">Total Balance</p>
+          <h2 className="text-3xl font-bold mb-4">{currencySymbol}{totalBalance}</h2>
+          <div className="flex justify-between items-end">
             <div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Wallet className="w-6 h-6 text-green-600" />
-              </div>
-              <p className="text-sm text-gray-500 mb-1">Wallet</p>
-              <p className="font-bold">₵{accounts.wallet}</p>
-            </div>
-            <div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <TrendingUp className="w-6 h-6 text-blue-600" />
-              </div>
-              <p className="text-sm text-gray-500 mb-1">Credit Score</p>
-              <p className="font-bold">{budgetData.creditScore}</p>
-            </div>
-            <div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Target className="w-6 h-6 text-purple-600" />
-              </div>
-              <p className="text-sm text-gray-500 mb-1">Budget Left</p>
-              <p className="font-bold">₵{(budgetData.monthlyBudget - budgetData.totalSpent).toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 mb-4">
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="font-bold text-lg mb-3">Upcoming Bills</h3>
-            <div className="bg-blue-50 rounded-lg p-4 mb-4">
-              <p className="text-blue-800 font-medium">
-                You have ₵{budgetData.bills.reduce((sum, bill) => bill.status === 'pending' ? sum + bill.amount : sum, 0)} in bills
+              <p className="text-xs opacity-80 mb-1">across {cards.length} card(s)</p>
+              <p className="text-sm font-medium tracking-wider">
+                {defaultCard.type.toUpperCase()} •••• •••• •••• {defaultCard.last4}
               </p>
             </div>
+            <Wallet className="w-8 h-8 opacity-30" />
+          </div>
+        </div>
 
-            <div>
-              {budgetData.bills.map((bill, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg mb-3">
-                  <div className="flex items-center">
-                    <div className="mr-3">
-                      {bill.status === 'paid' ? (
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      ) : (
-                        <AlertCircle className="w-5 h-5 text-yellow-500" />
-                      )}
+        {/* 3.5 Quick Actions Row */}
+        <div className="grid grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Send', icon: ArrowUpRight, path: '/transaction', state: { type: 'expense' } },
+            { label: 'Receive', icon: ArrowDownLeft, path: '/transaction', state: { type: 'income' } },
+            { label: 'Pay Bills', icon: Receipt, action: () => billsRef.current?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Top Up', icon: Plus, path: '/cards' }
+          ].map((action, i) => (
+            <div key={i} className="flex flex-col items-center">
+              <button 
+                onClick={() => action.path ? navigate(action.path, { state: action.state }) : action.action()}
+                className="w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center mb-2 hover:bg-gray-50 transition-colors"
+              >
+                <action.icon className="w-6 h-6 text-green-600" />
+              </button>
+              <span className="text-xs font-medium text-gray-600">{action.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 3.6 Spending Summary Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6">
+          <h3 className="font-bold text-gray-800 mb-4">Monthly Spending</h3>
+          <div className="flex justify-between items-end mb-2">
+            <span className="text-sm text-gray-500">
+              <span className="text-gray-800 font-bold">{currencySymbol}{budgetData.totalSpent}</span> spent of {currencySymbol}{budgetData.monthlyBudget}
+            </span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-3 mb-2 overflow-hidden">
+            <div 
+              className={`${spendingBarColor} h-full rounded-full transition-all duration-1000 ease-out`}
+              style={{ width: `${spendingPercent}%` }}
+            ></div>
+          </div>
+          <div className="text-right">
+            <span className="text-xs text-gray-500 font-medium">
+              {currencySymbol}{(budgetData.monthlyBudget - budgetData.totalSpent).toFixed(2)} left
+            </span>
+          </div>
+        </div>
+
+        {/* 3.7 Savings Goals Strip */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-gray-800">Savings Goals</h3>
+            <Link to="/budget-goals" className="text-sm text-green-600 font-medium">See all</Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide" style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+            {savingsGoals.length > 0 ? (
+              savingsGoals.map(goal => (
+                <div key={goal.id} className="min-w-[160px] bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+                  <p className="text-sm font-bold text-gray-800 mb-2 truncate">{goal.title}</p>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2">
+                    <div 
+                      className={`${goal.color || 'bg-blue-500'} h-full rounded-full`}
+                      style={{ width: `${Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-[10px] font-medium text-gray-500 mb-1">
+                    {currencySymbol}{goal.currentAmount} / {currencySymbol}{goal.targetAmount}
+                  </p>
+                  <p className="text-[10px] text-gray-400">Due {goal.deadline}</p>
+                </div>
+              ))
+            ) : (
+              <button 
+                onClick={() => navigate('/budget-goals')}
+                className="min-w-[160px] bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 p-4 flex flex-col items-center justify-center text-gray-400"
+              >
+                <Plus className="w-6 h-6 mb-1" />
+                <span className="text-xs">Add a goal</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 3.8 Recent Transactions List */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-gray-800">Recent Transactions</h3>
+            <Link to="/categories" className="text-sm text-green-600 font-medium">See all</Link>
+          </div>
+          <div className="space-y-3">
+            {recentTransactions.length > 0 ? (
+              recentTransactions.map(tx => (
+                <div key={tx.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-50 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                      style={{ backgroundColor: `${tx.color}20`, color: tx.color }}
+                    >
+                      {tx.icon}
                     </div>
                     <div>
-                      <p className="font-medium mb-0.5">{bill.name}</p>
-                      <p className="text-sm text-gray-500">Due {bill.due}</p>
+                      <p className="font-bold text-gray-800 text-sm">{tx.category}</p>
+                      <p className="text-xs text-gray-400 capitalize">{tx.type}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold mb-0.5">₵{bill.amount}</p>
-                    <p className={`text-xs ${bill.status === 'paid' ? 'text-green-500' : 'text-orange-600'} capitalize`}>
-                      {bill.status}
-                    </p>
+                  <p className={`font-bold text-sm ${tx.type === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
+                    {tx.type === 'expense' ? '-' : '+'}{currencySymbol}{tx.amount.toFixed(2)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-400">No transactions yet. Tap + to add one.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3.9 Upcoming Bills */}
+        <div ref={billsRef} className="mb-8">
+          <h3 className="font-bold text-gray-800 mb-4">Upcoming Bills</h3>
+          <div className="space-y-3">
+            {budgetData.bills.map((bill, index) => (
+              <div key={index} className={`flex items-center justify-between p-4 rounded-xl border ${bill.status === 'paid' ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 shadow-sm'}`}>
+                <div className="flex items-center gap-3">
+                  {bill.status === 'paid' ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-amber-500" />
+                  )}
+                  <div>
+                    <p className={`font-bold text-sm ${bill.status === 'paid' ? 'text-gray-500' : 'text-gray-800'}`}>{bill.name}</p>
+                    <p className="text-xs text-gray-400">Due {bill.due}</p>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex items-center gap-3">
+                  <p className="font-bold text-sm text-gray-800">{currencySymbol}{bill.amount}</p>
+                  {bill.status === 'pending' && (
+                    <button 
+                      onClick={() => payBill(bill.name)}
+                      className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-green-600 transition-colors"
+                    >
+                      Pay
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-2">
-          <div className="flex justify-around items-center max-w-md mx-auto">
-            <Link to="/dashboard" className="flex flex-col items-center p-2">
-              <Home className="w-5 h-5 text-blue-600" />
-              <span className="text-xs text-blue-600 mt-1">Home</span>
-            </Link>
-            <Link to="/categories" className="flex flex-col items-center p-2">
-              <BarChart3 className="w-5 h-5 text-gray-400" />
-              <span className="text-xs text-gray-400 mt-1">Analytics</span>
-            </Link>
-            <Link to="/transaction" className="bg-blue-600 rounded-full p-3">
-              <Plus className="w-6 h-6 text-white" />
-            </Link>
-            <Link to="/cards" className="flex flex-col items-center p-2">
-              <CreditCard className="w-5 h-5 text-gray-400" />
-              <span className="text-xs text-gray-400 mt-1">Cards</span>
-            </Link>
-            <Link to="/profile" className="flex flex-col items-center p-2">
-              <User className="w-5 h-5 text-gray-400" />
-              <span className="text-xs text-gray-400 mt-1">Profile</span>
-            </Link>
-          </div>
-        </div>
-
-        <BottomNavigation currentPage="home" />
       </div>
+
+      {/* 3.10 Bottom Navigation */}
+      <BottomNavigation currentPage="home" />
     </div>
   );
 };
 
 // Settings Component
-const Settings = () => {
+const Settings = ({ settings, updateSettings }) => {
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen">
       <div className="min-h-screen bg-gray-100 p-4">
@@ -678,7 +765,7 @@ const Settings = () => {
 };
 
 // Cards Component
-const Cards = () => {
+const Cards = ({ cards, addCard, removeCard, setDefaultCard }) => {
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen">
       <div className="min-h-screen bg-gray-100 p-4">
@@ -699,7 +786,7 @@ const Cards = () => {
 };
 
 // Profile Component
-const Profile = () => {
+const Profile = ({ profile, updateProfile }) => {
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen">
       <div className="min-h-screen bg-gray-100 p-4">
@@ -728,22 +815,121 @@ const GorkApp = () => {
     email: '',
     password: '',
   });
+
+  // Expanded State Model
+  const [cards, setCards] = useState([
+    { id: 1, type: 'momo', label: 'MTN MoMo', last4: '4321', balance: 2425.48, color: 'bg-yellow-400', isDefault: true },
+    { id: 2, type: 'visa', label: 'Ecobank Visa', last4: '8892', balance: 1250.00, color: 'bg-blue-600', isDefault: false }
+  ]);
+
+  const [profile, setProfile] = useState({
+    name: 'User',
+    username: 'user123',
+    email: 'user@example.com',
+    phone: '+233 24 000 0000',
+    avatar: null,
+    memberSince: 'May 2024',
+    currency: 'GHS'
+  });
+
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'alert', message: 'Low balance on MoMo', time: '2h ago', read: false },
+    { id: 2, type: 'success', message: 'Salary credited', time: '1d ago', read: true },
+    { id: 3, type: 'info', message: 'New feature: Savings Goals', time: '2d ago', read: false },
+    { id: 4, type: 'alert', message: 'Rent due in 3 days', time: '3d ago', read: false }
+  ]);
+
+  const [savingsGoals, setSavingsGoals] = useState([
+    { id: 1, title: 'New Laptop', targetAmount: 5000, currentAmount: 1200, deadline: '2024-12-31', color: 'bg-purple-500' },
+    { id: 2, title: 'Emergency Fund', targetAmount: 2000, currentAmount: 500, deadline: '2024-08-31', color: 'bg-green-500' }
+  ]);
+
+  const [settings, setSettings] = useState({
+    darkMode: false,
+    notifications: true,
+    biometrics: false,
+    currency: 'GHS',
+    language: 'English'
+  });
+
   const [transactions, setTransactions] = useState(STATIC_DATA.transactions);
   const [budgetData, setBudgetData] = useState(STATIC_DATA.budgetData);
+
+  // Setter Functions
+  const addCard = (card) => setCards([...cards, { ...card, id: Date.now() }]);
+  const removeCard = (id) => setCards(cards.filter(c => c.id !== id));
+  const setDefaultCard = (id) => setCards(cards.map(c => ({ ...c, isDefault: c.id === id })));
+
+  const updateProfile = (fields) => setProfile(prev => ({ ...prev, ...fields }));
+
+  const markNotificationRead = (id) => setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+  const clearAllNotifications = () => setNotifications([]);
+
+  const addSavingsGoal = (goal) => setSavingsGoals([...savingsGoals, { ...goal, id: Date.now() }]);
+  const updateSavingsGoal = (id, fields) => setSavingsGoals(savingsGoals.map(g => g.id === id ? { ...g, ...fields } : g));
+  const deleteSavingsGoal = (id) => setSavingsGoals(savingsGoals.filter(g => g.id !== id));
+
+  const updateSettings = (fields) => setSettings(prev => ({ ...prev, ...fields }));
+
+  const payBill = (name) => {
+    setBudgetData(prev => ({
+      ...prev,
+      bills: prev.bills.map(bill => bill.name === name ? { ...bill, status: 'paid' } : bill)
+    }));
+  };
+
+  // Update profile from userInfo when logging in
+  const handleSetUserInfo = (info) => {
+    setUserInfo(info);
+    setProfile(prev => ({
+      ...prev,
+      name: info.name || prev.name,
+      username: info.username || prev.username,
+      email: info.email || prev.email,
+      phone: info.phone || prev.phone
+    }));
+  };
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AuthPage setUserInfo={setUserInfo} />} />
-        <Route path="/auth" element={<AuthPage setUserInfo={setUserInfo} />} />
+        <Route path="/" element={<AuthPage setUserInfo={handleSetUserInfo} />} />
+        <Route path="/auth" element={<AuthPage setUserInfo={handleSetUserInfo} />} />
         <Route path="/account-selection" element={<AccountSelection />} />
-        <Route path="/dashboard" element={<Dashboard accounts={STATIC_DATA.accounts} budgetData={budgetData} transactions={transactions} />} />
+        <Route path="/dashboard" element={
+          <Dashboard 
+            transactions={transactions}
+            budgetData={budgetData}
+            cards={cards}
+            notifications={notifications}
+            savingsGoals={savingsGoals}
+            settings={settings}
+            profile={profile}
+            payBill={payBill}
+          />
+        } />
         <Route path="/transaction" element={<TransactionInput transactions={transactions} setTransactions={setTransactions} />} />
         <Route path="/categories" element={<CategoryVisualization transactions={transactions} budgetData={budgetData} />} />
-        <Route path="/budget-goals" element={<BudgetGoals budgetData={budgetData} setBudgetData={setBudgetData} />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/cards" element={<Cards />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/budget-goals" element={
+          <BudgetGoals 
+            budgetData={budgetData} 
+            setBudgetData={setBudgetData}
+            savingsGoals={savingsGoals}
+            addSavingsGoal={addSavingsGoal}
+            updateSavingsGoal={updateSavingsGoal}
+            deleteSavingsGoal={deleteSavingsGoal}
+          />
+        } />
+        <Route path="/settings" element={<Settings settings={settings} updateSettings={updateSettings} />} />
+        <Route path="/cards" element={
+          <Cards 
+            cards={cards} 
+            addCard={addCard} 
+            removeCard={removeCard} 
+            setDefaultCard={setDefaultCard} 
+          />
+        } />
+        <Route path="/profile" element={<Profile profile={profile} updateProfile={updateProfile} />} />
       </Routes>
     </BrowserRouter>
   );
